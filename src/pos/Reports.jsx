@@ -1,16 +1,17 @@
 import React from 'react';
-import { salesHistory, products } from '../mockData';
-import { 
-  Grid, Paper, Typography, Card, CardContent, Box, Table, 
-  TableBody, TableCell, TableContainer, TableHead, TableRow, Button 
+import { useSalesHistory } from '../context/SalesHistoryContext';
+import { useProducts } from '../context/ProductContext'; // Importar para obtener nombres de productos
+import {
+  Grid, Paper, Typography, Card, CardContent, Box, Table,
+  TableBody, TableCell, TableContainer, TableHead, TableRow, Button, CircularProgress
 } from '@mui/material';
-import { 
-  BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, 
-  CartesianGrid, Tooltip, Legend, ResponsiveContainer 
+import {
+  BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
+  CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
-import { AttachMoney, ShoppingCart, TrendingUp, MoreVert } from '@mui/icons-material';
+import { AttachMoney, ShoppingCart, TrendingUp } from '@mui/icons-material';
 
-// --- Componentes Auxiliares y Datos (sin cambios) ---
+// Componente auxiliar para las tarjetas de resumen
 const SummaryCard = ({ title, value, icon, color }) => (
   <Card elevation={6}>
     <CardContent>
@@ -29,14 +30,30 @@ const SummaryCard = ({ title, value, icon, color }) => (
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF'];
 
-// --- Componente Principal de Reportes (con ajustes de diseño) ---
-
+// Componente Principal de Reportes
 export default function Reports() {
-  // --- Lógica de cálculo de datos (sin cambios) ---
+  const { sales: salesHistory } = useSalesHistory();
+  const { products } = useProducts();
+
+  // Estado de carga mientras los datos se obtienen del backend
+  if (!salesHistory || !products || products.length === 0) {
+    return (
+      <Paper sx={{ p: 3, textAlign: 'center' }}>
+        <Typography variant="h6">Cargando datos de reportes...</Typography>
+        <Typography variant="body2" color="text.secondary">Asegúrate de haber realizado al menos una venta.</Typography>
+        <CircularProgress sx={{ mt: 2 }} />
+      </Paper>
+    );
+  }
+
+  // --- Lógica de Cálculo de Datos ---
+  
+  // 1. Métricas de Resumen
   const totalRevenue = salesHistory.reduce((sum, sale) => sum + sale.total, 0);
   const totalOrders = salesHistory.length;
-  const averageOrderValue = totalRevenue / totalOrders;
+  const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
+  // 2. Datos para el Gráfico de Barras (Ventas por Día)
   const salesByDay = salesHistory.reduce((acc, sale) => {
     const date = new Date(sale.date).toLocaleDateString('es-MX', { month: 'short', day: 'numeric' });
     if (!acc[date]) { acc[date] = 0; }
@@ -47,11 +64,15 @@ export default function Reports() {
     date, Ventas: salesByDay[date],
   })).sort((a, b) => new Date(a.date) - new Date(b.date));
 
+  // 3. Datos para el Gráfico Circular (Productos más vendidos)
   const productSales = salesHistory
     .flatMap(sale => sale.items)
     .reduce((acc, item) => {
-      if (!acc[item.productId]) { acc[item.productId] = 0; }
-      acc[item.productId] += item.quantity;
+      const productId = item.product.id;
+      if (!acc[productId]) {
+        acc[productId] = 0;
+      }
+      acc[productId] += item.quantity;
       return acc;
     }, {});
   
@@ -62,13 +83,26 @@ export default function Reports() {
   
   const totalPieValue = pieChartData.reduce((sum, entry) => sum + entry.value, 0);
 
+  // 4. Ventas Recientes para la Tabla
   const recentSales = [...salesHistory]
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, 5);
 
+  const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+    const RADIAN = Math.PI / 180;
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+    return (
+      <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central">
+        {`${(percent * 100).toFixed(0)}%`}
+      </text>
+    );
+  };
+
   return (
     <Box>
-      {/* Tarjetas de Resumen (sin cambios en su lógica) */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={4}>
           <SummaryCard title="Ventas Totales" value={`$${totalRevenue.toFixed(2)}`} icon={<AttachMoney sx={{ color: '#fff' }} />} color="success.main" />
@@ -81,9 +115,7 @@ export default function Reports() {
         </Grid>
       </Grid>
       
-      {/* Fila con los dos gráficos principales */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        {/* Gráfico de Barras (AJUSTADO) */}
         <Grid item xs={12} lg={7}>
           <Paper sx={{ p: 3, height: '450px', display: 'flex', flexDirection: 'column' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -92,21 +124,17 @@ export default function Reports() {
             </Box>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={barChartData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
-                {/* AJUSTE: Solo líneas de cuadrícula horizontales */}
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(224, 224, 224, 0.2)" vertical={false} />
                 <XAxis dataKey="date" tick={{ fill: '#e0e0e0', fontSize: 12 }} />
                 <YAxis tick={{ fill: '#e0e0e0' }} tickFormatter={(value) => `$${value}`} />
                 <Tooltip contentStyle={{ backgroundColor: '#232946', border: '1px solid #333' }} />
-                {/* AJUSTE: Leyenda en la parte superior */}
                 <Legend verticalAlign="top" align="center" wrapperStyle={{ paddingBottom: '20px' }}/>
-                {/* AJUSTE: Barras redondeadas en la parte superior */}
                 <Bar dataKey="Ventas" fill="#007bff" radius={[10, 10, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </Paper>
         </Grid>
 
-        {/* Gráfico de Dona con Leyenda Personalizada (AJUSTADO) */}
         <Grid item xs={12} lg={5}>
           <Paper sx={{ p: 3, height: '450px', display: 'flex', flexDirection: 'column' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -115,17 +143,7 @@ export default function Reports() {
             </Box>
             <ResponsiveContainer width="100%" height="70%">
               <PieChart>
-                {/* AJUSTE: innerRadius convierte el Pie en un Donut */}
-                <Pie 
-                  data={pieChartData} 
-                  dataKey="value" 
-                  nameKey="name" 
-                  cx="50%" 
-                  cy="50%" 
-                  innerRadius={70}
-                  outerRadius={110}
-                  paddingAngle={5}
-                >
+                <Pie data={pieChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={70} outerRadius={110} paddingAngle={5} labelLine={false} label={renderCustomizedLabel}>
                   {pieChartData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
@@ -133,7 +151,6 @@ export default function Reports() {
                 <Tooltip contentStyle={{ backgroundColor: '#232946', border: '1px solid #333' }} />
               </PieChart>
             </ResponsiveContainer>
-            {/* AJUSTE: Leyenda personalizada debajo del gráfico */}
             <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, flexWrap: 'wrap', mt: 2 }}>
               {pieChartData.map((entry, index) => (
                 <Box key={`legend-${index}`} sx={{ display: 'flex', alignItems: 'center' }}>
@@ -148,7 +165,6 @@ export default function Reports() {
         </Grid>
       </Grid>
 
-      {/* Tabla de Ventas Recientes (sin cambios) */}
       <Grid container spacing={3}>
         <Grid item xs={12}>
           <Paper sx={{ p: 2 }}>
@@ -157,7 +173,7 @@ export default function Reports() {
               <Table stickyHeader size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>ID de Venta</TableCell>
+                    <TableCell>Cliente</TableCell>
                     <TableCell>Fecha</TableCell>
                     <TableCell align="center">Nº de Artículos</TableCell>
                     <TableCell align="right">Total</TableCell>
@@ -166,7 +182,7 @@ export default function Reports() {
                 <TableBody>
                   {recentSales.map((sale) => (
                     <TableRow key={sale.id} hover>
-                      <TableCell component="th" scope="row">{sale.id}</TableCell>
+                      <TableCell>{sale.client?.name || 'Cliente General'}</TableCell>
                       <TableCell>{new Date(sale.date).toLocaleString()}</TableCell>
                       <TableCell align="center">{sale.items.reduce((sum, item) => sum + item.quantity, 0)}</TableCell>
                       <TableCell align="right">${sale.total.toFixed(2)}</TableCell>

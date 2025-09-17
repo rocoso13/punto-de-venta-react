@@ -1,74 +1,57 @@
-// src/context/AuthContext.jsx
-
-import { createContext, useState, useContext, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom'; // Importamos useNavigate
+import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import apiClient, { setupInterceptors } from '../api/axiosConfig';
 
 const AuthContext = createContext(null);
-const CINCO_MINUTOS = 5 * 60 * 1000;
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  // 1. Añadimos un nuevo estado para saber si estamos verificando la sesión inicial.
   const [loading, setLoading] = useState(true);
-  const logoutTimer = useRef();
-  const navigate = useNavigate(); // Usaremos navigate para redirigir desde el contexto
 
-  // La función login no cambia mucho.
-  const login = (userData) => {
-    setUser(userData);
-    const expiryTime = new Date().getTime() + CINCO_MINUTOS;
-    localStorage.setItem('session', JSON.stringify({ user: userData, expiry: expiryTime }));
-    logoutTimer.current = setTimeout(() => {
-        // Envolvemos el logout en una función para poder pasarle navigate
-        handleLogout(true); // true indica que es un logout automático
-    }, CINCO_MINUTOS);
-  };
-
-  // Renombramos logout a handleLogout para más claridad
-  const handleLogout = (isAutoLogout = false) => {
+  // Usamos useCallback para que la función logout no se recree en cada render.
+  const logout = useCallback(() => {
     setUser(null);
-    localStorage.removeItem('session');
-    if (logoutTimer.current) {
-      clearTimeout(logoutTimer.current);
+    localStorage.removeItem('jwt_token');
+    localStorage.removeItem('user_data');
+    // Redirigimos al login para una experiencia de usuario fluida.
+    window.location.href = '/login';
+  }, []);
+
+  // Este useEffect se ejecuta solo una vez y configura todo.
+  useEffect(() => {
+    // Aquí conectamos nuestro interceptor con la función logout.
+    setupInterceptors(logout);
+    
+    const token = localStorage.getItem('jwt_token');
+    const userData = localStorage.getItem('user_data');
+
+    if (token && userData) {
+      setUser(JSON.parse(userData));
     }
-    // Si es un logout automático, informamos al usuario y lo redirigimos
-    if (isAutoLogout) {
-        alert("Tu sesión ha expirado. Por favor, inicia sesión de nuevo.");
-        navigate('/login');
+    setLoading(false);
+  }, [logout]);
+
+  const login = async (email, password) => {
+    try {
+      const response = await apiClient.post('/auth/login', { email, password });
+      const { token, name, role } = response.data;
+      const userData = { name, email, role };
+
+      localStorage.setItem('jwt_token', token);
+      localStorage.setItem('user_data', JSON.stringify(userData));
+      setUser(userData);
+      
+      return { success: true };
+    } catch (error) {
+      console.error("Error en el login:", error);
+      return { success: false, message: error.response?.data?.message || 'Error al iniciar sesión' };
     }
   };
-
-  useEffect(() => {
-    const sessionData = localStorage.getItem('session');
-    
-    try {
-        if (sessionData) {
-          const parsedSession = JSON.parse(sessionData);
-          const now = new Date().getTime();
-
-          if (now < parsedSession.expiry) {
-            setUser(parsedSession.user);
-            const remainingTime = parsedSession.expiry - now;
-            logoutTimer.current = setTimeout(() => handleLogout(true), remainingTime);
-          } else {
-            localStorage.removeItem('session');
-          }
-        }
-    } catch (error) {
-        console.error("Error al procesar la sesión:", error);
-        localStorage.removeItem('session');
-    } finally {
-        // 2. Una vez que hemos terminado de verificar, ponemos 'loading' en 'false'.
-        setLoading(false);
-    }
-  }, []);
 
   const isAuthenticated = !!user;
 
-  // 3. Pasamos 'loading' y la función 'handleLogout' renombrada al value del Provider.
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout: handleLogout, isAuthenticated }}>
-      {children}
+    <AuthContext.Provider value={{ user, login, logout, isAuthenticated, loading }}>
+      {!loading && children}
     </AuthContext.Provider>
   );
 };

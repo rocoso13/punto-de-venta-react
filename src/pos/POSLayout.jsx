@@ -42,7 +42,7 @@ export default function POSLayout() {
         <ListItemLink to="/pos/sales" primary="Ventas" icon={<PointOfSale />} />
         <ListItemLink to="/pos/clients" primary="Clientes" icon={<SupervisedUserCircle />} />
 
-        {user?.role === 'admin' && (
+        {user?.role === 'ROLE_ADMIN' && (
           <>
             <ListItemLink to="/pos/cashier-closeout" primary="Corte de Caja" icon={<CashierIcon />} />
             <ListItemLink to="/pos/sales-history" primary="Historial" icon={<History />} />

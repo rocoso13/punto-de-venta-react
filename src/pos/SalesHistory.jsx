@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useSalesHistory } from '../context/SalesHistoryContext';
 import { useClients } from '../context/ClientContext'; // 1. Importar contexto de clientes
+import { useProducts } from '../context/ProductContext';
 import {
   Box, Paper, Typography, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, IconButton, Modal, List, ListItem, ListItemText, Divider,
@@ -14,16 +15,20 @@ const modalStyle = {
 };
 
 export default function SalesHistory() {
-  const { sales } = useSalesHistory();
-  const { clients } = useClients(); // 2. Obtener la lista de clientes
+  const { sales, fetchSales } = useSalesHistory(); // Obtenemos los datos y la función de refresco
+  const { products } = useProducts();
+  const { clients } = useClients();
   const [openModal, setOpenModal] = useState(false);
   const [selectedSale, setSelectedSale] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  console.log("esto trae clientes : ", clients);
+  
+  const handleRefresh = () => fetchSales();
 
   // Lógica de filtrado
   const filteredSales = useMemo(() => {
     return sales.filter(sale =>
-      sale.id.toLowerCase().includes(searchTerm.toLowerCase())
+      sale.id.toString().toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [sales, searchTerm]);
 
@@ -36,6 +41,9 @@ export default function SalesHistory() {
     setOpenModal(false);
     setSelectedSale(null);
   };
+
+  console.log(selectedSale);
+  
 
   return (
     <Box>
@@ -68,7 +76,7 @@ export default function SalesHistory() {
             </TableHead>
             <TableBody>
             {filteredSales.map((sale) => {
-                const clientName = clients.find(c => c.id === sale.clientId)?.name || 'Cliente General';
+                const clientName = clients.content.find(c => c.id === sale.clientId)?.name || 'Cliente General';
                 return (
                   <TableRow key={sale.id} hover>
                     <TableCell>{sale.id}</TableCell>
@@ -98,7 +106,7 @@ export default function SalesHistory() {
               Fecha: {new Date(selectedSale.date).toLocaleString()}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Cliente: {clients.find(c => c.id === selectedSale.clientId)?.name || 'Cliente General'}
+              Cliente: {clients.find(c => c.id === selectedSale.client)?.name || 'Cliente General'}
             </Typography>
             <Divider />
             <List dense sx={{ my: 2 }}>

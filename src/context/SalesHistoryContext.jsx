@@ -1,23 +1,55 @@
-import React, { createContext, useState, useContext } from 'react';
-import { salesHistory as mockSales } from '../mockData';
+import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import apiClient from '../api/axiosConfig';
+import { useAuth } from './AuthContext';
 
 const SalesHistoryContext = createContext();
 
 export const SalesHistoryProvider = ({ children }) => {
-  const [sales, setSales] = useState(mockSales);
+  const [sales, setSales] = useState([]);
+  const { isAuthenticated } = useAuth();
 
-  // Función para añadir una nueva venta al historial
-  const addSale = (newSaleData) => {
-    const sale = {
-      id: `SALE-${String(Date.now()).slice(-4)}`, // ID único simple
-      date: new Date().toISOString(),
-      ...newSaleData, // Esto incluirá 'items' y 'total'
-    };
-    setSales(prevSales => [sale, ...prevSales]);
+  const fetchSales = useCallback(async () => {
+    if (isAuthenticated) {
+      try {
+        console.log("va a entrar a la peticiohn");
+        const response = await apiClient.get('/sales/history');
+        console.log("salio");
+        const data = response.data;
+        console.log("esto trae la respuesta : ", data);
+        
+
+        if (Array.isArray(data.content)) {
+          setSales(data.content);
+        } else {
+          console.error("La respuesta de la API para el historial de ventas no es un array:", data);
+          setSales([]);
+        }
+      } catch (error) {
+        console.error("Error al cargar el historial de ventas:", error);
+        setSales([]);
+      }
+    } else {
+      setSales([]);
+    }
+  }, [isAuthenticated]); // 3. La dependencia de useCallback es 'isAuthenticated'
+
+  const addSale = async (newSaleData) => {
+    try {
+      await apiClient.post('/sales', newSaleData);
+      fetchSales();
+    } catch (error) {
+      console.error("Error al crear la venta:", error);
+      throw error;
+    }
   };
 
+
+  useEffect(() => {
+    fetchSales();
+  }, []);
+
   return (
-    <SalesHistoryContext.Provider value={{ sales, addSale }}>
+    <SalesHistoryContext.Provider value={{ sales, fetchSales, addSale }}>
       {children}
     </SalesHistoryContext.Provider>
   );

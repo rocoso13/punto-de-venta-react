@@ -37,13 +37,13 @@ function App() {
                     <Route path="/login" element={<Login />} />
                     <Route path="/unauthorized" element={<Unauthorized />} />
 
-                    <Route path="/pos" element={<ProtectedRoute allowedRoles={['user', 'admin']} />}>
+                    <Route path="/pos" element={<ProtectedRoute allowedRoles={['ROLE_USER', 'ROLE_ADMIN']} />}>
                       <Route element={<POSLayout />}>
                         <Route index element={<Sales />} />
                         <Route path="sales" element={<Sales />} />
                         <Route path="clients" element={<Clients />} />
 
-                        <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+                        <Route element={<ProtectedRoute allowedRoles={['ROLE_ADMIN']} />}>
                           <Route path="cashier-closeout" element={<CashierCloseout />} />
                           <Route path="sales-history" element={<SalesHistory />} />
                           <Route path="inventory" element={<Inventory />} />

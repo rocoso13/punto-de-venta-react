@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useProducts } from '../context/ProductContext';
-import { useSalesHistory } from '../context/SalesHistoryContext'; // 1. Importar Hook del historial
+import { useSalesHistory } from '../context/SalesHistoryContext';
 import { useClients } from '../context/ClientContext';
+import apiClient from '../api/axiosConfig';
 import {
     Box, Grid, Card, CardMedia, CardContent, Typography, CardActions, Button,
     Paper, List, ListItem, ListItemText, Divider, IconButton, Modal, Fade,
@@ -17,8 +18,8 @@ const modalStyle = {
 };
 
 export default function Sales() {
-    const { products, reduceStock } = useProducts();
-    const { addSale } = useSalesHistory();
+    const { products, fetchProducts } = useProducts(); // Obtenemos fetchProducts
+    const { fetchSales } = useSalesHistory();
     const { clients } = useClients();
     const [cart, setCart] = useState([]);
     const [openModal, setOpenModal] = useState(false);
@@ -79,22 +80,31 @@ export default function Sales() {
     };
     const handleCloseModal = () => setOpenModal(false);
 
-    const handleConfirmSale = () => {
-        // 3. Crear el objeto de la venta y guardarlo en el historial
-        const newSale = {
-            items: cart,
-            total: total,
-            paymentMethod: paymentMethod, // Añadimos el método de pago a la venta
-            // Aquí podrías añadir más datos como el cliente o el vendedor
-            clientId: selectedClient ? selectedClient.id : null, // 5. Guardar el ID del cliente en la venta
+    const handleConfirmSale = async () => {
+        const saleRequestDto = {
+            clientId: selectedClient ? selectedClient.id : null,
+            paymentMethod: paymentMethod,
+            items: cart.map(cartItem => ({
+                productId: cartItem.product.id,
+                quantity: cartItem.quantity
+            })),
         };
-        addSale(newSale); // Se guarda en el estado global
 
-        reduceStock(cart);
+        try {
+            await apiClient.post('/sales', saleRequestDto);
+            alert(`Venta para "${selectedClient ? selectedClient.name : 'Cliente General'}" confirmada.`);
 
-        alert(`Venta por $${total.toFixed(2)} (${paymentMethod}) confirmada.`);
-        clearCart();
-        handleCloseModal();
+            // Refrescamos los datos después de la venta
+            fetchProducts();
+            fetchSales();
+
+            clearCart();
+            setSelectedClient(null);
+            handleCloseModal();
+        } catch (error) {
+            console.error("Error al crear la venta:", error);
+            alert("Error al procesar la venta: " + (error.response?.data?.message || error.message));
+        }
     };
 
     return (

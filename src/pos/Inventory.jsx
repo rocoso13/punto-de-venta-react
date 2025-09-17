@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { useProducts } from '../context/ProductContext';
+import { usePagination } from '../hooks/usePagination'; // 1. Importar nuestro hook
+import PaginationComponent from '../components/PaginationComponent'; // 2. Importar el componente de UI
+import apiClient from '../api/axiosConfig';
 import {
   Box, Paper, Typography, Button, Table, TableBody, TableCell, Chip,
   TableContainer, TableHead, TableRow, IconButton, Modal, TextField,
@@ -20,8 +23,8 @@ const modalStyle = {
 };
 
 export default function Inventory() {
-  const { products, updateProductList } = useProducts();
-  
+  // const { products, fetchProducts } = useProducts();
+  const { data: products, loading, page, totalPages, goToPage, refetch } = usePagination('/products');
   const [openModal, setOpenModal] = useState(false);
   const [openConfirmDialog, setOpenConfirmDialog] = useState(false);
   const [currentProduct, setCurrentProduct] = useState({ id: null, name: '', price: '', stock: '', image: '' });
@@ -44,25 +47,27 @@ export default function Inventory() {
     setOpenModal(false);
   };
 
-  const handleSave = () => {
-    let updatedProducts;
-    // Asegurarse de que el stock y el precio sean números
+  const handleSave = async () => {
     const productData = {
-        ...currentProduct,
-        price: parseFloat(currentProduct.price) || 0,
-        stock: parseInt(currentProduct.stock, 10) || 0,
+      ...currentProduct,
+      price: parseFloat(currentProduct.price) || 0,
+      stock: parseInt(currentProduct.stock, 10) || 0,
     };
 
-    if (isEditing) {
-      updatedProducts = products.map(p => p.id === productData.id ? productData : p);
-    } else {
-      const newProduct = { ...productData, id: Date.now() };
-      updatedProducts = [...products, newProduct];
+    try {
+      if (isEditing) {
+        await apiClient.put(`/products/${productData.id}`, productData);
+      } else {
+        await apiClient.post('/products', productData);
+      }
+      refetch();
+      handleCloseModal();
+    } catch (error) {
+      console.error("Error al guardar el producto:", error);
+      alert("No se pudo guardar el producto.");
     }
-    updateProductList(updatedProducts);
-    handleCloseModal();
   };
-  
+
   const handleDeleteClick = (product) => {
     setProductToDelete(product);
     setOpenConfirmDialog(true);
@@ -73,10 +78,15 @@ export default function Inventory() {
     setProductToDelete(null);
   };
 
-  const handleConfirmDelete = () => {
-    const updatedProducts = products.filter(p => p.id !== productToDelete.id);
-    updateProductList(updatedProducts);
-    handleCloseConfirmDialog();
+  const handleConfirmDelete = async () => {
+    try {
+      await apiClient.delete(`/products/${productToDelete.id}`);
+      refetch(); // Refresca la lista
+      handleCloseConfirmDialog();
+    } catch (error) {
+      console.error("Error al eliminar el producto:", error);
+      alert("No se pudo eliminar el producto.");
+    }
   };
 
   const handleInputChange = (e) => {
@@ -121,7 +131,7 @@ export default function Inventory() {
                   <TableCell component="th" scope="row">{product.name}</TableCell>
                   <TableCell align="right">${parseFloat(product.price).toFixed(2)}</TableCell>
                   <TableCell align="center">
-                    <Chip 
+                    <Chip
                       label={product.stock}
                       color={product.stock === 0 ? "error" : product.stock <= 10 ? "warning" : "success"}
                       size="small"
@@ -136,6 +146,12 @@ export default function Inventory() {
             </TableBody>
           </Table>
         </TableContainer>
+        {/* 5. Añadimos el componente de paginación */}
+            <PaginationComponent
+              page={page}
+              totalPages={totalPages}
+              onPageChange={goToPage}
+            />
       </Paper>
 
       <Modal open={openModal} onClose={handleCloseModal}>
@@ -143,10 +159,10 @@ export default function Inventory() {
           <Typography variant="h6" component="h2" mb={2}>
             {isEditing ? 'Editar Producto' : 'Añadir Nuevo Producto'}
           </Typography>
-          <TextField fullWidth margin="normal" label="Nombre del Producto" name="name" value={currentProduct.name} onChange={handleInputChange}/>
-          <TextField fullWidth margin="normal" label="Precio" name="price" type="number" value={currentProduct.price} onChange={handleInputChange}/>
-          <TextField fullWidth margin="normal" label="Stock" name="stock" type="number" value={currentProduct.stock} onChange={handleInputChange}/>
-          <TextField fullWidth margin="normal" label="URL de la Imagen" name="image" value={currentProduct.image} onChange={handleInputChange}/>
+          <TextField fullWidth margin="normal" label="Nombre del Producto" name="name" value={currentProduct.name} onChange={handleInputChange} />
+          <TextField fullWidth margin="normal" label="Precio" name="price" type="number" value={currentProduct.price} onChange={handleInputChange} />
+          <TextField fullWidth margin="normal" label="Stock" name="stock" type="number" value={currentProduct.stock} onChange={handleInputChange} />
+          <TextField fullWidth margin="normal" label="URL de la Imagen" name="image" value={currentProduct.image} onChange={handleInputChange} />
           <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
             <Button variant="outlined" color="secondary" onClick={handleCloseModal}>Cancelar</Button>
             <Button variant="contained" color="primary" onClick={handleSave}>Guardar</Button>

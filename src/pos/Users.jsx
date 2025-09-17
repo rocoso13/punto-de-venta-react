@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useUsers } from '../context/UserContext';
+import apiClient from '../api/axiosConfig';
 import {
   Box, Paper, Typography, Button, Table, TableBody, TableCell, Chip,
   TableContainer, TableHead, TableRow, IconButton, Modal, TextField,
@@ -21,23 +22,26 @@ const modalStyle = {
 };
 
 export default function Users() {
-  const { users, updateUserList } = useUsers();
+  const { users, fetchUsers } = useUsers();
   
   const [openModal, setOpenModal] = useState(false);
   const [openConfirmDialog, setOpenConfirmDialog] = useState(false);
-  const [currentUser, setCurrentUser] = useState({ id: null, name: '', email: '', role: 'user' });
+  
+  // --- CAMBIO CLAVE 1: El rol por defecto ahora coincide con el backend ---
+  const [currentUser, setCurrentUser] = useState({ id: null, name: '', email: '', role: 'ROLE_USER', password: '' });
+  
   const [userToDelete, setUserToDelete] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
 
   const handleAddNew = () => {
     setIsEditing(false);
-    setCurrentUser({ id: null, name: '', email: '', role: 'user' });
+    setCurrentUser({ id: null, name: '', email: '', role: 'ROLE_USER', password: '' });
     setOpenModal(true);
   };
 
   const handleEdit = (user) => {
     setIsEditing(true);
-    setCurrentUser(user);
+    setCurrentUser({ ...user, password: '' });
     setOpenModal(true);
   };
 
@@ -45,16 +49,26 @@ export default function Users() {
     setOpenModal(false);
   };
 
-  const handleSave = () => {
-    let updatedUsers;
-    if (isEditing) {
-      updatedUsers = users.map(u => u.id === currentUser.id ? currentUser : u);
-    } else {
-      const newUser = { ...currentUser, id: Date.now() }; // ID simple
-      updatedUsers = [...users, newUser];
+  const handleSave = async () => {
+    try {
+      if (isEditing) {
+        // La edición requeriría un endpoint específico en el backend.
+        // await apiClient.put(`/api/users/${currentUser.id}`, currentUser);
+        alert("La funcionalidad de editar usuarios aún no está implementada en el backend.");
+      } else {
+        await apiClient.post('/api/auth/register', {
+            name: currentUser.name,
+            email: currentUser.email,
+            password: currentUser.password,
+            role: currentUser.role
+        });
+      }
+      fetchUsers();
+      handleCloseModal();
+    } catch (error) {
+        console.error("Error al guardar usuario:", error);
+        alert("No se pudo guardar el usuario. Verifique que el correo no esté ya en uso.");
     }
-    updateUserList(updatedUsers);
-    handleCloseModal();
   };
   
   const handleDeleteClick = (user) => {
@@ -67,10 +81,16 @@ export default function Users() {
     setUserToDelete(null);
   };
 
-  const handleConfirmDelete = () => {
-    const updatedUsers = users.filter(u => u.id !== userToDelete.id);
-    updateUserList(updatedUsers);
-    handleCloseConfirmDialog();
+  const handleConfirmDelete = async () => {
+    try {
+      // La eliminación requeriría un endpoint específico.
+      // await apiClient.delete(`/api/users/${userToDelete.id}`);
+      alert("La funcionalidad de eliminar usuarios aún no está implementada en el backend.");
+      handleCloseConfirmDialog();
+    } catch (error) {
+       console.error("Error al eliminar usuario:", error);
+       alert("No se pudo eliminar el usuario.");
+    }
   };
 
   const handleInputChange = (e) => {
@@ -101,16 +121,12 @@ export default function Users() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {users.map((user) => (
+              {users.content?.map((user) => (
                 <TableRow key={user.id} hover>
-                  <TableCell component="th" scope="row">{user.name}</TableCell>
+                  <TableCell>{user.name}</TableCell>
                   <TableCell>{user.email}</TableCell>
                   <TableCell align="center">
-                    <Chip 
-                      label={user.role}
-                      color={user.role === 'admin' ? "primary" : "default"}
-                      size="small"
-                    />
+                    <Chip label={user.role.replace('ROLE_', '')} color={user.role === 'ROLE_ADMIN' ? "primary" : "default"} size="small"/>
                   </TableCell>
                   <TableCell align="center">
                     <IconButton onClick={() => handleEdit(user)}><Edit color="primary" /></IconButton>
@@ -126,28 +142,21 @@ export default function Users() {
       {/* Modal para Añadir/Editar Usuario */}
       <Modal open={openModal} onClose={handleCloseModal}>
         <Box sx={modalStyle}>
-          <Typography variant="h6" component="h2" mb={2}>
-            {isEditing ? 'Editar Usuario' : 'Añadir Nuevo Usuario'}
-          </Typography>
+          <Typography variant="h6">{isEditing ? 'Editar Usuario' : 'Añadir Nuevo Usuario'}</Typography>
           <TextField fullWidth margin="normal" label="Nombre Completo" name="name" value={currentUser.name} onChange={handleInputChange}/>
           <TextField fullWidth margin="normal" label="Correo Electrónico" name="email" type="email" value={currentUser.email} onChange={handleInputChange}/>
+          { !isEditing && <TextField fullWidth margin="normal" label="Contraseña" name="password" type="password" value={currentUser.password} onChange={handleInputChange}/>}
           <FormControl fullWidth margin="normal">
             <InputLabel id="role-select-label">Rol</InputLabel>
-            <Select
-              labelId="role-select-label"
-              id="role-select"
-              name="role"
-              value={currentUser.role}
-              label="Rol"
-              onChange={handleInputChange}
-            >
-              <MenuItem value="user">Usuario (Vendedor)</MenuItem>
-              <MenuItem value="admin">Administrador</MenuItem>
+            <Select labelId="role-select-label" name="role" value={currentUser.role} label="Rol" onChange={handleInputChange}>
+              {/* --- CAMBIO CLAVE 2: Los valores ahora coinciden con el Enum del backend --- */}
+              <MenuItem value="ROLE_USER">Usuario (Vendedor)</MenuItem>
+              <MenuItem value="ROLE_ADMIN">Administrador</MenuItem>
             </Select>
           </FormControl>
           <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-            <Button variant="outlined" color="secondary" onClick={handleCloseModal}>Cancelar</Button>
-            <Button variant="contained" color="primary" onClick={handleSave}>Guardar</Button>
+            <Button onClick={handleCloseModal}>Cancelar</Button>
+            <Button variant="contained" onClick={handleSave}>Guardar</Button>
           </Box>
         </Box>
       </Modal>

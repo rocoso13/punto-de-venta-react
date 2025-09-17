@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useClients } from '../context/ClientContext';
 import { useSalesHistory } from '../context/SalesHistoryContext'; // 1. Importar historial de ventas
+import apiClient from '../api/axiosConfig';
 
 import {
     Box, Paper, Typography, Button, Table, TableBody, TableCell,
@@ -23,7 +24,7 @@ const modalStyle = {
 };
 
 export default function Clients() {
-    const { clients, updateClientList } = useClients();
+    const { clients, updateClientList, fetchClients } = useClients();
     const { sales } = useSalesHistory(); // 2. Obtener las ventas
     const [openModal, setOpenModal] = useState(false);
     const [openHistoryModal, setOpenHistoryModal] = useState(false);
@@ -49,16 +50,21 @@ export default function Clients() {
         setOpenModal(false);
     };
 
-    const handleSave = () => {
-        let updatedClients;
-        if (isEditing) {
-            updatedClients = clients.map(c => c.id === currentClient.id ? currentClient : c);
-        } else {
-            const newClient = { ...currentClient, id: Date.now() }; // ID simple
-            updatedClients = [...clients, newClient];
+    const handleSave = async () => {
+        try {
+            if (isEditing) {
+                // LLAMADA A LA API PARA ACTUALIZAR
+                await apiClient.put(`/clients/${currentClient.id}`, currentClient);
+            } else {
+                // LLAMADA A LA API PARA CREAR
+                await apiClient.post('/clients', currentClient);
+            }
+            fetchClients(); // Refresca la lista de clientes
+            handleCloseModal();
+        } catch (error) {
+            console.error("Error al guardar el cliente:", error);
+            alert("No se pudo guardar el cliente.");
         }
-        updateClientList(updatedClients);
-        handleCloseModal();
     };
 
     const handleDeleteClick = (client) => {
@@ -71,10 +77,16 @@ export default function Clients() {
         setClientToDelete(null);
     };
 
-    const handleConfirmDelete = () => {
-        const updatedClients = clients.filter(c => c.id !== clientToDelete.id);
-        updateClientList(updatedClients);
-        handleCloseConfirmDialog();
+    const handleConfirmDelete = async () => {
+        try {
+            // LLAMADA A LA API PARA ELIMINAR
+            await apiClient.delete(`/clients/${clientToDelete.id}`);
+            fetchClients(); // Refresca la lista
+            handleCloseConfirmDialog();
+        } catch (error) {
+            console.error("Error al eliminar el cliente:", error);
+            alert("No se pudo eliminar el cliente.");
+        }
     };
 
     const handleInputChange = (e) => {
@@ -86,11 +98,11 @@ export default function Clients() {
         const clientSales = sales.filter(sale => sale.clientId === client.id);
         setSelectedClientHistory({ ...client, sales: clientSales });
         setOpenHistoryModal(true);
-      };
-    
-      const handleCloseHistoryModal = () => {
+    };
+
+    const handleCloseHistoryModal = () => {
         setOpenHistoryModal(false);
-      };
+    };
 
     return (
         <Box>
@@ -120,7 +132,7 @@ export default function Clients() {
                                     <TableCell component="th" scope="row">{client.name}</TableCell>
                                     <TableCell>{client.email}</TableCell>
                                     <TableCell>{client.phone}</TableCell>
-                                    
+
                                     <TableCell align="center">
                                         {/* 3. NUEVO BOTÓN para ver el historial */}
                                         <IconButton onClick={() => handleOpenHistory(client)}><History color="info" /></IconButton>
@@ -150,41 +162,41 @@ export default function Clients() {
                 </Box>
             </Modal>
             {selectedClientHistory && (
-        <Modal open={openHistoryModal} onClose={handleCloseHistoryModal}>
-          <Box sx={modalStyle}>
-            <Typography variant="h6">Historial de Compras</Typography>
-            <Typography variant="body1" color="text.secondary" mb={2}>
-              {selectedClientHistory.name}
-            </Typography>
-            <TableContainer component={Paper} sx={{ maxHeight: 400 }}>
-              <Table size="small" stickyHeader>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>ID Venta</TableCell>
-                    <TableCell>Fecha</TableCell>
-                    <TableCell align="right">Total</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {selectedClientHistory.sales.length > 0 ? (
-                    selectedClientHistory.sales.map(sale => (
-                      <TableRow key={sale.id}>
-                        <TableCell>{sale.id}</TableCell>
-                        <TableCell>{new Date(sale.date).toLocaleDateString()}</TableCell>
-                        <TableCell align="right">${sale.total.toFixed(2)}</TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={3} align="center">Este cliente no tiene compras registradas.</TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Box>
-        </Modal>
-      )}
+                <Modal open={openHistoryModal} onClose={handleCloseHistoryModal}>
+                    <Box sx={modalStyle}>
+                        <Typography variant="h6">Historial de Compras</Typography>
+                        <Typography variant="body1" color="text.secondary" mb={2}>
+                            {selectedClientHistory.name}
+                        </Typography>
+                        <TableContainer component={Paper} sx={{ maxHeight: 400 }}>
+                            <Table size="small" stickyHeader>
+                                <TableHead>
+                                    <TableRow>
+                                        <TableCell>ID Venta</TableCell>
+                                        <TableCell>Fecha</TableCell>
+                                        <TableCell align="right">Total</TableCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {selectedClientHistory.sales.length > 0 ? (
+                                        selectedClientHistory.sales.map(sale => (
+                                            <TableRow key={sale.id}>
+                                                <TableCell>{sale.id}</TableCell>
+                                                <TableCell>{new Date(sale.date).toLocaleDateString()}</TableCell>
+                                                <TableCell align="right">${sale.total.toFixed(2)}</TableCell>
+                                            </TableRow>
+                                        ))
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell colSpan={3} align="center">Este cliente no tiene compras registradas.</TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </TableContainer>
+                    </Box>
+                </Modal>
+            )}
 
             {/* Diálogo de Confirmación para Eliminar */}
             <Dialog open={openConfirmDialog} onClose={handleCloseConfirmDialog}>

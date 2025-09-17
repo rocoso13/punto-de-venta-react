@@ -1,42 +1,42 @@
-import React, { createContext, useState, useContext } from 'react';
-import { products as mockProducts } from '../mockData';
+import React, { createContext, useState, useContext, useEffect, useCallback } from 'react'; // 1. Asegúrate de importar useCallback
+import apiClient from '../api/axiosConfig';
+import { useAuth } from './AuthContext';
 
-// 1. Creamos el contexto
 const ProductContext = createContext();
 
-// 2. Creamos el "Proveedor" que contendrá el estado y las funciones
 export const ProductProvider = ({ children }) => {
-  const [products, setProducts] = useState(mockProducts);
+  const [products, setProducts] = useState([]);
+  const { isAuthenticated } = useAuth();
 
-  // Función para actualizar la lista completa de productos (usada en Inventario)
-  const updateProductList = (newProductList) => {
-    setProducts(newProductList);
-  };
-
-  // Función para reducir el stock después de una venta (usada en Ventas)
-  const reduceStock = (cart) => {
-    setProducts(prevProducts => {
-      // Creamos una copia del array de productos para no mutar el estado directamente
-      const updatedProducts = prevProducts.map(p => ({...p}));
-      
-      cart.forEach(cartItem => {
-        const productIndex = updatedProducts.findIndex(p => p.id === cartItem.product.id);
-        if (productIndex !== -1) {
-          updatedProducts[productIndex].stock -= cartItem.quantity;
+  // 2. ENVOLVEMOS LA FUNCIÓN ASÍNCRONA CON useCallback
+  const fetchProducts = useCallback(async () => {
+    if (isAuthenticated) {
+      try {
+        const response = await apiClient.get('/products');
+        if (response.data && Array.isArray(response.data.content)) {
+          setProducts(response.data.content);
+        } else {
+          setProducts([]);
         }
-      });
-      return updatedProducts;
-    });
-  };
+      } catch (error) {
+        console.error("Error al cargar productos:", error);
+      }
+    } else {
+      setProducts([]);
+    }
+  }, [isAuthenticated]); // 3. La dependencia de useCallback es 'isAuthenticated'
+
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]); // 4. La dependencia de useEffect es la función memorizada
 
   return (
-    <ProductContext.Provider value={{ products, updateProductList, reduceStock }}>
+    <ProductContext.Provider value={{ products, fetchProducts }}>
       {children}
     </ProductContext.Provider>
   );
 };
 
-// 3. Creamos un Hook personalizado para usar el contexto fácilmente
 export const useProducts = () => {
   return useContext(ProductContext);
 };
